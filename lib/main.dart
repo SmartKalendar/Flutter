@@ -1,21 +1,23 @@
+import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:intl/intl.dart';
-
-import 'package:flutter/material.dart';
 import 'package:record/record.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:http/http.dart' as http;
+import 'package:table_calendar/table_calendar.dart';
 
-  Future<String> sendHttpPostRequest(List<int> requestBody) async {
-    //   API 엔드포인트 URL
-  String apiUrl = 'https://naveropenapi.apigw.ntruss.com/recog/v1/stt?lang=Kor';
+import 'event.dart';
+
+Future<String> sendHttpPostRequest(List<int> requestBody) async {
+  //   API 엔드포인트 URL
+  String apiUrl = '';
 
   // 클라이언트 ID와 시크릿 키
-  String clientID = 'p9dbk5ndln';
-  String clientSecret = 'cwjf4QHMSSqixvh4Kmde8agjQAVUiGITeaBd5akX';
+  String clientID = '';
+  String clientSecret = '';
 
   // 요청 헤더 설정
   Map<String, String> headers = {
@@ -65,7 +67,7 @@ Future<void> sendChatCompletionRequest(String ReadCsrResult) async {
   };
 
   final headers = {
-    "Authorization": "Bearer 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",
+    "Authorization": "Bearer ",
     "Content-Type": 'application/json; charset=UTF-8',
   };
 
@@ -80,79 +82,51 @@ Future<void> sendChatCompletionRequest(String ReadCsrResult) async {
   }
 }
 
-Future<void> createGoogleCalendarEvent(Map<String, dynamic> eventDetails) async {
-  final String apiUrl = 'https://www.googleapis.com/calendar/v3/calendars/primary/events';
-  final String accessToken = '{"web":{"client_id":"1060715981383-2jrjklqbl538m2nqr1u7glecbt4r7hna.apps.googleusercontent.com","project_id":"smartkalendar-404017","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_secret":"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"}}'; // 사용자의 OAuth 2.0 액세스 토큰
-
-  final Map<String, String> headers = {
-    'Authorization': 'Bearer $accessToken',
-    'Content-Type': 'application/json',
-  };
-
-  final String requestBody = jsonEncode(eventDetails);
-
-  final http.Response response = await http.post(
-    Uri.parse(apiUrl),
-    headers: headers,
-    body: requestBody,
-  );
-
-  if (response.statusCode == 200) {
-    // 이벤트가 성공적으로 생성됨
-    print('Event created successfully');
-  } else {
-    // 오류 응답 처리
-    print('Error creating event: ${response.statusCode} - ${response.body}');
-  }
-}
-
-Future<void> main() async {
-  runApp(const MyApp());
+void main() {
+  runApp(MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'TableCalendar',
       theme: ThemeData(
-
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
+        primarySwatch: Colors.pink,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: TableEventsExample(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-
-  final String title;
-
+class TableEventsExample extends StatefulWidget {
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  _TableEventsExampleState createState() => _TableEventsExampleState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-    late Record audioRecord;
-    late AudioPlayer audioPlayer;
-    bool isRecording = false;
-    String audioPath='';
-    //String audioPath='/path/to/recorded/audio.wav';
-    //String audioPath='https://example.com/my-audio.wav';
-    //String audioPath='aFullPath/myFile.m4a';
+class _TableEventsExampleState extends State<TableEventsExample> {
+  CalendarFormat _calendarFormat = CalendarFormat.month;
+  DateTime _focusedDay = DateTime.now();
+  DateTime? _selectedDay;
+  late Record audioRecord;
+  late AudioPlayer audioPlayer;
+  bool isRecording = false;
+  String audioPath='';
 
-    @override
+  //이벤트 만든거 저장
+  Map<DateTime, List<Event>> events ={};
+  TextEditingController _eventController = TextEditingController();
+  late final ValueNotifier<List<Event>> _selectedEvents;
+
+  @override
   void initState() {
     audioPlayer=AudioPlayer();
     audioRecord=Record();
     super.initState();
+    _selectedDay = _focusedDay;
+    _selectedEvents = ValueNotifier(_getEventsForDay(_selectedDay!));
   }
+
   @override
   void dispose() {
     audioRecord.dispose();
@@ -174,26 +148,26 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-    Future<void> stopRecording() async{
-      try{
-        String? path = await audioRecord.stop();
-        setState(() {
-          isRecording=false;
-          audioPath=path!;
-        });
-      }
-        catch(e){
-          print('Error Stopping record : $e');
-        }
+  Future<void> stopRecording() async{
+    try{
+      String? path = await audioRecord.stop();
+      setState(() {
+        isRecording=false;
+        audioPath=path!;
+      });
     }
+    catch(e){
+      print('Error Stopping record : $e');
+    }
+  }
 
-    Future<void> playRecording() async{
-      //if (audioPath.isNotEmpty) {
-        try {
-          List<int> audioData = File(audioPath).readAsBytesSync();
-          String csr = await sendHttpPostRequest(audioData);
-          sendChatCompletionRequest(csr);
-          /*createGoogleCalendarEvent({
+  Future<void> playRecording() async{
+    //if (audioPath.isNotEmpty) {
+    try {
+      List<int> audioData = File(audioPath).readAsBytesSync();
+      String csr = await sendHttpPostRequest(audioData);
+      sendChatCompletionRequest(csr);
+      /*createGoogleCalendarEvent({
             'summary': 'AI 설계 및 실습',  // 이벤트 제목
             'location': '동아대학교',  // 장소
             'description': 'AI 설계 및 실습 발표 준비',  // 설명
@@ -206,51 +180,148 @@ class _MyHomePageState extends State<MyHomePage> {
               'timeZone': 'Asia/Seoul',
             },
           });*/
-          await audioPlayer.play(audioPath as Source, mode: PlayerMode.mediaPlayer,);
-          //Source urlSource = UrlSource(audioPath);
-          //await audioPlayer.play(urlSource);
-        }
-        catch (e) {
-          print('Error Playing Recording : $e');
-        }
-      //}
+      await audioPlayer.play(audioPath as Source, mode: PlayerMode.mediaPlayer,);
+      //Source urlSource = UrlSource(audioPath);
+      //await audioPlayer.play(urlSource);
     }
+    catch (e) {
+      print('Error Playing Recording : $e');
+    }
+    //}
+  }
+
+  void _onDaySelected(DateTime selectedDay, DateTime focusedDay) {
+    if (!isSameDay(_selectedDay, selectedDay)) {
+      setState(() {
+        _selectedDay = selectedDay;
+        _focusedDay = focusedDay;
+      });
+      _selectedEvents.value = _getEventsForDay(selectedDay);
+    }
+  }
+
+  List<Event> _getEventsForDay(DateTime day) {
+    return events[day] ?? [];
+  }
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
       appBar: AppBar(
-
-        title: const Text('Audio Recorder'),
+        title: Text('Smart Kalendar'),
       ),
-      body: Center(
-
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            if(isRecording)
-              const Text(
-                'Recording in Progress',
-                style: TextStyle(
-                  fontSize: 20,
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          showDialog(
+              context: context,
+              builder: (context) {
+                return AlertDialog(
+                  scrollable: true,
+                  title: Text("event name"),
+                  content: Padding(
+                    padding: EdgeInsets.all(8),
+                    child: TextField(
+                      controller: _eventController,
+                    ),
+                  ),
+                  actions: [
+                    ElevatedButton(
+                        onPressed: () {
+                          //map에 이벤트 네임 저장
+                          events.addAll({
+                            _selectedDay!: [Event(_eventController.text)]
+                          });
+                          Navigator.of(context).pop();
+                          _selectedEvents.value=_getEventsForDay(_selectedDay!);
+                        },
+                        child: Text("submit"))
+                  ],
+                );
+              });
+        },
+        child: Icon(Icons.add),
+      ),
+      body: Column(
+        children: [
+          // 첫 번째 Column: 테이블 캘린더
+          TableCalendar<Event>(
+            firstDay: DateTime.utc(2010, 3, 14),
+            lastDay: DateTime.utc(2030, 3, 14),
+            focusedDay: _focusedDay,
+            selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+            calendarFormat: _calendarFormat,
+            startingDayOfWeek: StartingDayOfWeek.sunday,
+            onDaySelected: _onDaySelected,
+            eventLoader: _getEventsForDay,
+            calendarStyle: CalendarStyle(
+              outsideDaysVisible: false,
+            ),
+            onFormatChanged: (format) {
+              if (_calendarFormat != format) {
+                setState(() {
+                  _calendarFormat = format;
+                });
+              }
+            },
+            onPageChanged: (focusedDay) {
+              _focusedDay = focusedDay;
+            },
+          ),
+          SizedBox(height: 8.0,),
+          Expanded(
+            child: ValueListenableBuilder<List<Event>>(
+              valueListenable: _selectedEvents,
+              builder: (context, value, _) {
+                return ListView.builder(
+                  itemCount: value.length,
+                  itemBuilder: (context, index) {
+                    return Container(
+                      margin: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 4
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border.all(),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: ListTile(
+                        onTap: () => print('${value[index]}'),
+                        title: Text('${value[index]}'),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+          // 두 번째 Column: 녹음 버튼
+          Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                if (isRecording)
+                  const Text(
+                    'Recording in Progress',
+                    style: TextStyle(
+                      fontSize: 20,
+                    ),
+                  ),
+                ElevatedButton(
+                  onPressed: isRecording ? stopRecording : startRecording,
+                  child: isRecording ? const Text('Stop Recording') : const Text('Start Recording'),
                 ),
-              ),
-            ElevatedButton(
-              onPressed: isRecording ? stopRecording : startRecording,
-              child: isRecording? const Text('Stop Recording') : const Text('Start Recording'),
+                const SizedBox(
+                  height: 25,
+                ),
+                if (!isRecording && audioPath != null)
+                  ElevatedButton(
+                    onPressed: playRecording,
+                    child: const Text('Play Recording'),
+                  ),
+              ],
             ),
-            const SizedBox(
-              height:25,
-            ),
-            if(!isRecording && audioPath !=null)
-            ElevatedButton(
-              onPressed: playRecording,
-              child: const Text('Play Recording'),
-            ),
-
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
